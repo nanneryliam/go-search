@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="GO Search">
+<link rel="apple-touch-icon" href="icon.png">
+<title>GO Search Builder</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--text:#1b1d22;--muted:#6b7280;--line:#d9dce2;--inc:#1f9d55;--exc:#d64545;--acc:#3b6fe0;--on:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#14161a;--card:#1e2127;--text:#eceef2;--muted:#9aa1ad;--line:#343944;--inc:#35b46c;--exc:#e86060;--acc:#6b93f0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:160px}
+header{padding:16px 16px 4px}
+h1{font-size:20px;margin:0}
+.sub,.note{color:var(--muted);font-size:13px;margin-top:2px}
+.warn{color:var(--exc)}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:12px 16px;padding:12px}
+summary{font-size:15px;font-weight:600;cursor:pointer;padding:6px 0;min-height:36px}
+details[open]>summary{margin-bottom:4px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:8px 12px;font-size:15px;min-height:40px;cursor:pointer}
+.chip.inc{background:var(--inc);border-color:var(--inc);color:var(--on)}
+.chip.exc{background:var(--exc);border-color:var(--exc);color:var(--on);text-decoration:line-through}
+.row{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.row label{flex:1;font-size:15px}
+.tick{display:block;margin:8px 0;font-size:15px}
+input[type=number]{width:96px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:16px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+#out{width:100%;min-height:44px;max-height:84px;overflow:auto;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-family:ui-monospace,Menlo,monospace;font-size:14px;word-break:break-all}
+.btns{display:flex;gap:8px;margin-top:8px}
+.btns button{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
+.btns button.p{background:var(--acc);border-color:var(--acc);color:var(--on)}
+.len{color:var(--muted);font-size:12px;margin-top:4px}
+.link{background:none;border:0;color:var(--acc);font-size:13px;padding:0;margin-left:6px;cursor:pointer}
+</style>
+</head>
+<body>
+<header><h1>GO Search Builder</h1>
+<div class="sub">Tap once to include (+), twice to exclude (−), three times to clear.</div>
+<div class="sub" id="status">Loading rankings…</div></header>
+<div id="app"></div>
+<div class="bar">
+<div id="out"></div>
+<div class="len" id="len"></div>
+<div class="btns"><button id="reset">Reset</button><button class="p" id="copy">Copy</button></div>
+</div>
+<script>
+const CPM=[0.0939999968,0.135137431,0.16639787,0.192650914,0.21573247,0.236572655,0.255720049,0.273530381,0.290249884,0.306057381,0.321087599,0.335445032,0.349212676,0.362457749,0.375235587,0.387592411,0.399567276,0.41119355,0.422500014,0.432926413,0.443107545,0.453059954,0.462798387,0.472336078,0.481684953,0.49085581,0.499858439,0.508701757,0.517393947,0.525942509,0.534354329,0.542635762,0.550792694,0.558830599,0.56675452,0.574569148,0.582278907,0.589887912,0.59740001,0.604823658,0.612157285,0.619404111,0.626567125,0.633649182,0.640652955,0.647580963,0.654435635,0.661219264,0.667934,0.674581899,0.68116492,0.687684906,0.694143653,0.700542893,0.706884205,0.713169102,0.719399095,0.725575617,0.731700003,0.734741011,0.737769485,0.740785575,0.743789434,0.746781209,0.749761045,0.752729105,0.755685508,0.758630367,0.761563838,0.764486065,0.767397165,0.770297274,0.773186505,0.776064946,0.77893275,0.781790065,0.784636974,0.787473584,0.790300012,0.792803951,0.795300007,0.797803921,0.800300002,0.802803892,0.805299997,0.807803863,0.810299993,0.812803835,0.815299988,0.817803807,0.820299983,0.822803779,0.825299978,0.827803751,0.830299973,0.832803753,0.835300028,0.837803756,0.840300024];
+function rank1(base,cap){
+ let best=null;
+ for(let a=0;a<16;a++)for(let d=0;d<16;d++)for(let h=0;h<16;h++){
+  const A=base.atk+a,D=base.def+d,H=base.hp+h;
+  let lv=98;
+  while(lv>0){const c=CPM[lv];if(Math.floor(A*Math.sqrt(D*H)*c*c/10)<=cap)break;lv--}
+  const c=CPM[lv];
+  const p=(A*c)*(D*c)*Math.max(10,Math.floor(H*c));
+  if(!best||p>best.p+1e-9||(Math.abs(p-best.p)<=1e-9&&a+d+h>best.s))best={p:p,iv:[a,d,h],s:a+d+h};
+ }
+ return best.iv;
+}
+function pick(rank,byId,cap,noMythical){
+ const seen=new Set(),out=[];
+ for(const e of rank){
+  const s=byId[e.speciesId];if(!s)continue;
+  const tg=s.tags||[];
+  if(tg.includes("mega")||tg.includes("supermega"))continue;
+  if(noMythical&&tg.includes("mythical"))continue;
+  if(seen.has(s.dex))continue;
+  seen.add(s.dex);
+  out.push({label:s.speciesName.replace(/ \(Shadow\)$/,""),term:String(s.dex),iv:rank1(s.baseStats,cap)});
+  if(out.length>=20)break;
+ }
+ return out;
+}
+
+</script>
+<script>
+const BASE="https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/";
+const SEASON_START=Date.UTC(2026,8,8,20);
+// Known league schedule (UTC). Add rows here when a new rotation is announced.
+const SCHED=[{from:Date.UTC(2026,10,24,21),to:Date.UTC(2026,11,1,21),ids:["master","catch"]}];
+const LG=[
+{id:"master",name:"Master League",cap:99999,file:"10000",d:1,note:"No CP cap."},
+{id:"catch",name:"Mega Catch Cup (Great)",cap:1500,file:"1500",noMyth:true,d:2,season:true,note:"1500 CP cap · only Pokémon caught this season · no Mythicals. Adds a caught-since-season-start filter."},
+{id:"great",name:"Great League",cap:1500,file:"1500",d:2,note:"1500 CP cap."},
+{id:"ultra",name:"Ultra League",cap:2500,file:"2500",d:2,note:"2500 CP cap."}
+];
+const G=[
+{id:"status",title:"Status",items:[["Shiny","shiny"],["Legendary","legendary"],["Mythical","mythical"],["Ultra Beast","ultrabeast"],["Shadow","shadow"],["Purified","purified"],["Lucky","lucky"],["Favorite","favorite"],["Traded","traded"],["Mega","mega"],["Costume","costume"],["Evolved","evolved"],["Can evolve","evolve"],["New","new"],["Defender","defender"]]},
+{id:"stars",title:"Appraisal stars",items:[["0★","0*"],["1★","1*"],["2★","2*"],["3★","3*"],["4★ (hundo)","4*"]]},
+{id:"types",title:"Type",items:["normal","fire","water","grass","electric","ice","fighting","poison","ground","flying","psychic","bug","rock","ghost","dragon","dark","steel","fairy"].map(t=>[t[0].toUpperCase()+t.slice(1),t])}
+];
+const state={};let lists={};let cpMin="",cpMax="",ageMax="";
+const $=id=>document.getElementById(id);
+const app=$("app");
+function paint(c){const s=state[c.dataset.k];c.className="chip"+(s?" "+s:"");c.textContent=(s==="inc"?"+ ":s==="exc"?"− ":"")+c.dataset.l}
+function chip(k,l){const b=document.createElement("button");b.dataset.k=k;b.dataset.l=l;b.className="chip";b.textContent=l;
+ b.onclick=()=>{const n=!state[k]?"inc":state[k]==="inc"?"exc":null;if(n)state[k]=n;else delete state[k];paint(b);build()};return b}
+function sect(title,note){const s=document.createElement("details");s.innerHTML="<summary></summary>"+(note?'<div class="note"></div>':"")+'<div class="chips"></div>';
+ s.querySelector("summary").textContent=title;if(note)s.querySelector(".note").textContent=note;app.appendChild(s);return s}
+function activeIds(){const n=Date.now();const r=SCHED.find(x=>n>=x.from&&n<x.to);return r?r.ids:null}
+G.forEach(g=>{const s=sect(g.title);const box=s.querySelector(".chips");g.items.forEach(([l,t])=>box.appendChild(chip(g.id+":"+t,l)))});
+const iv=sect("PvP IVs","Tap a league pick below and its IVs are added automatically. Choose one:");
+iv.insertAdjacentHTML("beforeend",'<label class="tick"><input type="checkbox" id="ivp"> Perfect IVs for the league (rank 1 spread)</label><label class="tick"><input type="checkbox" id="ivu" checked> Usable IVs (close to rank 1: ±1 Master, ±2 others)</label>');
+$("ivp").onchange=()=>{if($("ivp").checked)$("ivu").checked=false;build()};
+$("ivu").onchange=()=>{if($("ivu").checked)$("ivp").checked=false;build()};
+const act=activeIds();
+const order=LG.slice().sort((a,b)=>(act&&act.includes(b.id)?1:0)-(act&&act.includes(a.id)?1:0));
+order.forEach(l=>{
+ const live=act&&act.includes(l.id);
+ const s=sect(l.name+(live?" ● active now":"")+" — top picks",l.note);
+ const box=s.querySelector(".chips");box.dataset.lg=l.id;box.textContent="Loading…";
+ const bar=document.createElement("div");bar.className="chips";
+ [["All +","inc"],["All −","exc"],["Clear",null]].forEach(([t,m])=>{const a=document.createElement("button");a.className="chip";a.textContent=t;
+  a.onclick=()=>{box.querySelectorAll(".chip").forEach(c=>{if(m)state[c.dataset.k]=m;else delete state[c.dataset.k];paint(c)});build()};bar.appendChild(a)});
+ s.insertBefore(bar,box);
+});
+const num=sect("Ranges");
+num.insertAdjacentHTML("beforeend",'<div class="row"><label for="cpmin">CP at least</label><input id="cpmin" type="number" inputmode="numeric" min="0"></div><div class="row"><label for="cpmax">CP at most</label><input id="cpmax" type="number" inputmode="numeric" min="0"></div><div class="row"><label for="age">Caught within (days)</label><input id="age" type="number" inputmode="numeric" min="0"></div>');
+["cpmin","cpmax","age"].forEach(id=>$(id).oninput=()=>{cpMin=$("cpmin").value;cpMax=$("cpmax").value;ageMax=$("age").value;build()});
+
+function render(){
+ LG.forEach(l=>{const box=document.querySelector('.chips[data-lg="'+l.id+'"]');const items=lists[l.id];if(!items)return;
+  box.textContent="";items.forEach(p=>box.appendChild(chip("p_"+l.id+":"+p.term,p.label+" "+p.iv.join("/"))));
+  box.querySelectorAll(".chip").forEach(paint)});
+ build();
+}
+function status(msg,warn){const e=$("status");e.className="sub"+(warn?" warn":"");e.textContent=msg;
+ const b=document.createElement("button");b.className="link";b.textContent="Refresh";b.onclick=()=>load(true);e.appendChild(b)}
+function stale(){const last=SCHED[SCHED.length-1];return Date.now()>=last.to}
+async function getJSON(p){const r=await fetch(BASE+p);if(!r.ok)throw new Error(p+" "+r.status);return r.json()}
+async function load(force){
+ let cached=null;try{cached=JSON.parse(localStorage.getItem("pogo_v1")||"null")}catch(e){}
+ if(cached&&cached.lists){lists=cached.lists;render()}
+ const fresh=cached&&Date.now()-cached.t<6*36e5;
+ const note=stale()?" League schedule is out of date, so no league is marked active.":"";
+ if(fresh&&!force){status("Rankings from PvPoke, saved "+new Date(cached.t).toLocaleString()+"."+note,stale());return}
+ $("status").textContent="Updating rankings…";
+ try{
+  const [mon,r10,r15,r25]=await Promise.all([getJSON("gamemaster/pokemon.json"),getJSON("rankings/all/overall/rankings-10000.json"),getJSON("rankings/all/overall/rankings-1500.json"),getJSON("rankings/all/overall/rankings-2500.json")]);
+  const by={};mon.forEach(s=>by[s.speciesId]=s);
+  const R={"10000":r10,"1500":r15,"2500":r25};
+  const out={};LG.forEach(l=>out[l.id]=pick(R[l.file],by,l.cap,l.noMyth));
+  lists=out;try{localStorage.setItem("pogo_v1",JSON.stringify({t:Date.now(),lists:out}))}catch(e){}
+  render();status("Rankings from PvPoke, updated just now."+note,stale());
+ }catch(e){
+  if(cached)status("Couldn't update, showing saved rankings from "+new Date(cached.t).toLocaleString()+".",true);
+  else status("Couldn't load rankings. Check your connection.",true);
+ }
+}
+
+function build(){
+ const parts=[];
+ G.forEach(g=>{const inc=g.items.filter(([,t])=>state[g.id+":"+t]==="inc").map(([,t])=>t);if(inc.length)parts.push(inc.join(","))});
+ const terms=new Set(),ents=[],ex=new Set();let season=false;
+ LG.forEach(l=>(lists[l.id]||[]).forEach(p=>{const s=state["p_"+l.id+":"+p.term];
+  if(s==="inc"){terms.add(p.term);ents.push({v:p.iv,d:l.d});if(l.season)season=true}
+  else if(s==="exc")ex.add(p.term)}));
+ if(terms.size)parts.push([...terms].join(","));
+ if(ents.length&&($("ivp").checked||$("ivu").checked)){
+  ["attack","defense","hp"].forEach((st,i)=>{const vals=new Set();
+   ents.forEach(e=>{const v=e.v[i];if($("ivp").checked)vals.add(v);else for(let x=Math.max(0,v-e.d);x<=Math.min(15,v+e.d);x++)vals.add(x)});
+   parts.push([...vals].sort((a,b)=>a-b).map(v=>v+st).join(","))})}
+ if(season){const days=Math.floor((Date.now()-SEASON_START)/864e5)+1;parts.push("age0-"+Math.max(days,1))}
+ G.forEach(g=>g.items.forEach(([,t])=>{if(state[g.id+":"+t]==="exc")parts.push("!"+t)}));
+ ex.forEach(t=>parts.push("!"+t));
+ if(cpMin||cpMax)parts.push("cp"+(cpMin||"0")+"-"+(cpMax||""));
+ if(ageMax)parts.push("age0-"+ageMax);
+ const s=parts.join("&");
+ $("out").textContent=s||"(nothing selected)";
+ $("len").textContent=s.length+" characters";
+ return s;
+}
+$("copy").onclick=async()=>{
+ const s=build();if(!s)return;
+ try{await navigator.clipboard.writeText(s)}catch(e){
+  const r=document.createRange();r.selectNodeContents($("out"));
+  const sel=getSelection();sel.removeAllRanges();sel.addRange(r);
+  try{document.execCommand("copy")}catch(_){}
+ }
+ $("copy").textContent="Copied!";setTimeout(()=>$("copy").textContent="Copy",1200);
+};
+$("reset").onclick=()=>{
+ for(const k in state)delete state[k];
+ document.querySelectorAll(".chip[data-k]").forEach(paint);
+ ["cpmin","cpmax","age"].forEach(id=>$(id).value="");
+ cpMin=cpMax=ageMax="";build();
+};
+build();load(false);
+</script>
+</body>
+</html>
